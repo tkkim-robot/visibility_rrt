@@ -27,6 +27,7 @@ The available options are:
 
 SHOW_ANIMATION = False
 
+
 class VisibilityRRTStar:
     def __init__(self, x_start, x_goal, max_sampled_node_dist=10, max_rewiring_node_dist=10,
                  goal_sample_rate=0.1, rewiring_radius=20, iter_max=1000, solve_QP=False,
@@ -38,37 +39,38 @@ class VisibilityRRTStar:
         self.max_sampled_node_dist = max_sampled_node_dist
         self.max_rewiring_node_dist = max_rewiring_node_dist
         self.goal_sample_rate = goal_sample_rate
-        self.rewiring_radius = rewiring_radius # [m]
+        self.rewiring_radius = rewiring_radius  # [m]
         self.iter_max = iter_max
         self.solve_QP = solve_QP
         self.show_animation = show_animation
         self.path_saved = path_saved
 
         # tuning parameters
-        self.sample_delta = 0.5 # pad the environment boundary
-        self.goal_len = 1 
+        self.sample_delta = 0.1  # pad the environment boundary
+        self.goal_len = 1
 
         # initialization
-        self.vertex = [self.x_start] # store all nodes in the RRT tre
-        self.path = [] # final result of RRT algorithm
+        self.vertex = [self.x_start]  # store all nodes in the RRT tre
+        self.path = []  # final result of RRT algorithm
 
         # general setup
         self.env = env.Env()
-        self.x_range = self.env.x_range # x range of the env
-        self.y_range = self.env.y_range # y range of the env
+        self.x_range = self.env.x_range  # x range of the env
+        self.y_range = self.env.y_range  # y range of the env
         self.plotting = plotting.Plotting(x_start, x_goal)
-        utils_ = utils.Utils() # in this code, only use is_collision()
+        utils_ = utils.Utils()  # in this code, only use is_collision()
         self.is_collision = utils_.is_collision
         # self.obs_circle = self.env.obs_circle
-        lqr_cbf_planner = LQR_CBF_Planner(visibility=visibility, collision_cbf=collision_cbf)
+        lqr_cbf_planner = LQR_CBF_Planner(
+            visibility=visibility, collision_cbf=collision_cbf)
         self.lqr_cbf_planning = lqr_cbf_planner.lqr_cbf_planning
-        self.LQR_Gain = dict() # call by reference, so it's modified in LQRPlanner
+        self.LQR_Gain = dict()  # call by reference, so it's modified in LQRPlanner
 
     def planning(self):
         print("===================================")
         print("============  RRT*   ==============")
         print("Start generating path.")
-    
+
         start_time = time.time()
 
         compute_node_time = 0
@@ -87,19 +89,21 @@ class VisibilityRRTStar:
                 # visualization
                 if k % 100 == 0:
                     print('rrtStar sampling iterations: ', k)
-                    print('rrtStar 1000 iterations sampling time: ', time.time() - start_time)
+                    print('rrtStar 1000 iterations sampling time: ',
+                          time.time() - start_time)
                     start_time = time.time()
 
                 if k % 500 == 0:
                     print('rrtStar sampling iterations: ', k)
-                    self.plotting.animation_online(self.vertex, "rrtStar", True)
+                    self.plotting.animation_online(
+                        self.vertex, "rrtStar", True)
 
             rewire_start_time = time.time()
 
             # when node_new is feasible and safe
             if node_new and not self.is_collision(node_nearest, node_new):
                 # the order of this function should not be changed, otherwise, neighbor might include itself
-                neighbor_index = self.find_near_neighbor(node_new) 
+                neighbor_index = self.find_near_neighbor(node_new)
                 # add node_new to the tree
                 self.vertex.append(node_new)
 
@@ -108,7 +112,7 @@ class VisibilityRRTStar:
                     self.LQR_choose_parent(node_new, neighbor_index)
                     self.rewire(node_new, neighbor_index)
             rewire_end_time = time.time()
-        
+
             compute_node_time += compute_node_end_time - compute_node_start_time
             rewire_time += rewire_end_time - rewire_start_time
 
@@ -125,7 +129,8 @@ class VisibilityRRTStar:
         self.save_traj_npy(self.path, self.path_saved)
         # visualization
         if self.show_animation:
-            self.plotting.animation(self.vertex, self.path, "rrt*, N = " + str(self.iter_max))
+            self.plotting.animation(
+                self.vertex, self.path, "rrt*, N = " + str(self.iter_max))
 
         print("====  Path planning finished  =====")
         print("===================================\n")
@@ -138,12 +143,12 @@ class VisibilityRRTStar:
     def generate_random_node(self, goal_sample_rate=0.1):
         delta = self.sample_delta
 
-        if np.random.random() > goal_sample_rate: # 0 < goal_sample_rate < random < 1.0
+        if np.random.random() > goal_sample_rate:  # 0 < goal_sample_rate < random < 1.0
             return Node((np.random.uniform(self.x_range[0] + delta, self.x_range[1] - delta),
                         np.random.uniform(self.y_range[0] + delta, self.y_range[1] - delta)))
 
-        return copy.deepcopy(self.x_goal) # random < goal_sample_rate
-    
+        return copy.deepcopy(self.x_goal)  # random < goal_sample_rate
+
     @staticmethod
     def nearest_neighbor(node_list, n):
         return node_list[int(np.argmin([math.hypot(nd.x - n.x, nd.y - n.y)
@@ -156,14 +161,15 @@ class VisibilityRRTStar:
             clip_max_dist: if True, clip the distance of node_goal to be at most self.max_sampled_node_dist
         """
         dist, theta = self.get_distance_and_angle(node_start, node_goal)
-        if clip_max_dist: 
+        if clip_max_dist:
             dist = min(self.max_sampled_node_dist, dist)
         node_goal.x = node_start.x + dist * math.cos(theta)
         node_goal.y = node_start.y + dist * math.sin(theta)
         node_goal.yaw = theta
 
         # rtraj = [rx, ry, ryaw]: feasible robot trajectory
-        rtraj, _, _, = self.lqr_cbf_planning(node_start, node_goal, self.LQR_Gain, solve_QP=self.solve_QP, show_animation=False)
+        rtraj, _, _, = self.lqr_cbf_planning(
+            node_start, node_goal, self.LQR_Gain, solve_QP=self.solve_QP, show_animation=False)
         rx, ry, ryaw = rtraj
         if len(rx) == 1:
             return None
@@ -174,22 +180,23 @@ class VisibilityRRTStar:
 
         # calculate cost in terms of trajectory length
         node_new.cost = node_start.cost + sum(abs(c) for c in traj_cost)
-        #node_new.StateTraj = np.array([px,py]) # Will be needed for adaptive sampling 
+        # node_new.StateTraj = np.array([px,py]) # Will be needed for adaptive sampling
         return node_new
-
 
     def find_near_neighbor(self, node_new):
         """
             - for rewiring
         """
         n = len(self.vertex) + 1
-        r = min(self.max_rewiring_node_dist, self.rewiring_radius * math.sqrt((math.log(n) / n)))
+        r = min(self.max_rewiring_node_dist,
+                self.rewiring_radius * math.sqrt((math.log(n) / n)))
 
-        dist_table = [math.hypot(nd.x - node_new.x, nd.y - node_new.y) for nd in self.vertex]
+        dist_table = [math.hypot(nd.x - node_new.x, nd.y - node_new.y)
+                      for nd in self.vertex]
         dist_table_index = [ind for ind in range(len(dist_table)) if dist_table[ind] <= r and
                             not self.is_collision(node_new, self.vertex[ind])]
         return dist_table_index
-    
+
     def sample_path(self, rx, ry, step=0.2):
         # smooth path
         px, py, traj_costs = [], [], []
@@ -200,16 +207,17 @@ class VisibilityRRTStar:
                 py.append(t * ry[i+1] + (1.0 - t) * ry[i])
 
         dx, dy = np.diff(px), np.diff(py)
-        traj_costs = [math.sqrt(idx ** 2 + idy ** 2) for (idx, idy) in zip(dx, dy)]
+        traj_costs = [math.sqrt(idx ** 2 + idy ** 2)
+                      for (idx, idy) in zip(dx, dy)]
         return px, py, traj_costs
 
     def cal_LQR_new_cost(self, node_start, node_goal):
-        rtraj, _, can_reach = self.lqr_cbf_planning(node_start, node_goal, self.LQR_Gain, show_animation=False, solve_QP=self.solve_QP)
+        rtraj, _, can_reach = self.lqr_cbf_planning(
+            node_start, node_goal, self.LQR_Gain, show_animation=False, solve_QP=self.solve_QP)
         rx, ry, ryaw = rtraj
         px, py, traj_cost = self.sample_path(rx, ry)
         if rx is None:
             return float('inf'), False
-        
 
         return node_start.cost + sum(abs(c) for c in traj_cost), can_reach
 
@@ -221,10 +229,13 @@ class VisibilityRRTStar:
         for i in neighbor_index:
 
             # check if neighbor_node can reach node_new
-            _, _, can_reach = self.lqr_cbf_planning(self.vertex[i], node_new, self.LQR_Gain, show_animation=False, solve_QP=self.solve_QP)
+            _, _, can_reach = self.lqr_cbf_planning(
+                self.vertex[i], node_new, self.LQR_Gain, show_animation=False, solve_QP=self.solve_QP)
 
-            if can_reach and not self.is_collision(self.vertex[i], node_new):  #collision check should be updated if using CBF
-                update_cost, _ = self.cal_LQR_new_cost(self.vertex[i], node_new)
+            # collision check should be updated if using CBF
+            if can_reach and not self.is_collision(self.vertex[i], node_new):
+                update_cost, _ = self.cal_LQR_new_cost(
+                    self.vertex[i], node_new)
                 cost.append(update_cost)
             else:
                 cost.append(float('inf'))
@@ -235,35 +246,39 @@ class VisibilityRRTStar:
             return None
 
         cost_min_index = neighbor_index[int(np.argmin(cost))]
-        node_new.parent = self.vertex[cost_min_index] 
-        node_new.parent.childrenNodeInds.add(len(self.vertex)-1) # Add the index of node_new to the children of its parent. This step is essential when rewiring the tree to project the changes of the cost of the rewired node to its antecessors  
-        
+        node_new.parent = self.vertex[cost_min_index]
+        # Add the index of node_new to the children of its parent. This step is essential when rewiring the tree to project the changes of the cost of the rewired node to its antecessors
+        node_new.parent.childrenNodeInds.add(len(self.vertex)-1)
 
     def rewire(self, node_new, neighbor_index):
-        #print(len(neighbor_index))
+        # print(len(neighbor_index))
         for i in neighbor_index:
             node_neighbor = self.vertex[i]
 
             # check collision and LQR reachabilty
-            #print(math.hypot(node_new.x - node_neighbor.x, node_new.y - node_neighbor.y))
+            # print(math.hypot(node_new.x - node_neighbor.x, node_new.y - node_neighbor.y))
             if not self.is_collision(node_new, node_neighbor):
-                new_cost, can_rach = self.cal_LQR_new_cost(node_new, node_neighbor)
+                new_cost, can_rach = self.cal_LQR_new_cost(
+                    node_new, node_neighbor)
 
                 if can_rach and node_neighbor.cost > new_cost:
                     node_neighbor.parent = node_new
                     node_neighbor.cost = new_cost
                     self.updateCosts(node_neighbor)
 
-    def updateCosts(self,node):
-        #print("update costs: ", node.childrenNodeInds)
-        for ich in node.childrenNodeInds: 
-            self.vertex[ich].cost = self.cal_LQR_new_cost(node,self.vertex[ich])[0] # FIXME since we already know that this path is safe, we only need to compute the cost 
+    def updateCosts(self, node):
+        # print("update costs: ", node.childrenNodeInds)
+        for ich in node.childrenNodeInds:
+            # FIXME since we already know that this path is safe, we only need to compute the cost
+            self.vertex[ich].cost = self.cal_LQR_new_cost(
+                node, self.vertex[ich])[0]
             self.updateCosts(self.vertex[ich])
-            
 
     def search_goal_parent(self):
-        dist_list = [math.hypot(n.x - self.x_goal.x, n.y - self.x_goal.y) for n in self.vertex]
-        node_index = [i for i in range(len(dist_list)) if dist_list[i] <= self.goal_len]
+        dist_list = [math.hypot(n.x - self.x_goal.x,
+                                n.y - self.x_goal.y) for n in self.vertex]
+        node_index = [i for i in range(
+            len(dist_list)) if dist_list[i] <= self.goal_len]
 
         if not node_index:
             return None
@@ -280,7 +295,7 @@ class VisibilityRRTStar:
         node = node_end
 
         while node.parent is not None:
-            #print(node.x, node.y, node.yaw)
+            # print(node.x, node.y, node.yaw)
             path.append([node.x, node.y, node.yaw])
             node = node.parent
         path.append([node.x, node.y, node.yaw])
@@ -297,12 +312,13 @@ class VisibilityRRTStar:
 
     @staticmethod
     def save_traj_npy(traj, path_saved):
-        if path_saved  is None:
+        if path_saved is None:
             cwd = os.getcwd()
             path_saved = os.path.join(cwd, 'output',
-                                            'state_traj.npy')
+                                      'state_traj.npy')
         print("Saving state trajectory...")
-        np.save(path_saved , traj)
+        np.save(path_saved, traj)
+
 
 if __name__ == '__main__':
     SHOW_ANIMATION = True
@@ -315,18 +331,24 @@ if __name__ == '__main__':
     elif env_type == 2:
         x_start = (2.0, 2.0, 0)  # Starting node (x, y, yaw)
         x_goal = (10.0, 2.0)  # Goal node
+    elif env_type == 3:
+        x_start = (3.3, 0.3, np.pi/2)  # Starting node (x, y, yaw)
+        x_goal = (1.2, 0.5)  # Goal node
 
     lqr_rrt_star = VisibilityRRTStar(x_start=x_start, x_goal=x_goal,
-                              max_sampled_node_dist=1.0,
-                              max_rewiring_node_dist=2,
-                              goal_sample_rate=0.1,
-                              rewiring_radius=2,  
-                              iter_max=2000,
-                              solve_QP=False,
-                              visibility=False,
-                              collision_cbf=False,
-                              show_animation=SHOW_ANIMATION)
-    waypoints, _ , _ = lqr_rrt_star.planning()
+                                     max_sampled_node_dist=0.2,
+                                     max_rewiring_node_dist=0.4,
+                                     goal_sample_rate=0.1,
+                                     rewiring_radius=0.4,
+                                     iter_max=1000,
+                                     solve_QP=False,
+                                     visibility=True,
+                                     collision_cbf=True,
+                                     show_animation=SHOW_ANIMATION)
+    waypoints, _, _ = lqr_rrt_star.planning()
+
+    # save the waypoints to a csv
+    np.savetxt('waypoints.csv', waypoints, delimiter=',')
 
     x_init = waypoints[0]
     path_follower = UnicyclePathFollower('DynamicUnicycle2D', x_init, waypoints,

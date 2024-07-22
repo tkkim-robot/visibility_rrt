@@ -1,5 +1,5 @@
 
-type = 2
+type = 3
 
 if type == 1:
     WIDTH = 35
@@ -11,6 +11,12 @@ if type == 2:
     HEIGHT = 15
     x_start = (2.0, 2.0, 0)  # Starting node (x, y, yaw)
     x_goal = (10.0, 2.0)  # Goal node
+if type == 3:
+    WIDTH = 3.6
+    HEIGHT = 3.6
+    x_start = (0.3, 0.3, 0)  # Starting node (x, y, yaw)
+    x_goal = (2.4, 0.5)  # Goal node
+
 
 class Env:
     def __init__(self):
@@ -24,7 +30,7 @@ class Env:
     def obs_boundary(width, height):  # circle
         w = width
         h = height
-        linewidth = 0.5
+        linewidth = 0.05
         obs_boundary = [
             [0, 0, linewidth, h],
             [0, h, w, linewidth],
@@ -43,6 +49,7 @@ class Env:
         # ]
         obs_rectangle = []
         return obs_rectangle
+
     @staticmethod
     def obs_circle():
         if type == 1:
@@ -65,6 +72,14 @@ class Env:
                 [7.5, 6, 1],
                 [7.5, 8, 1],
                 [12.0, 10.0, 1],
+
+            ]
+        if type == 3:
+            obs_cir = [
+                [2.1, 0.3, 0.3],
+                [2.1, 0.9, 0.3],
+                [2.1, 1.5, 0.3],
+                [2.1, 2.1, 0.3]
 
             ]
         # # randomly generate 6 obstacles

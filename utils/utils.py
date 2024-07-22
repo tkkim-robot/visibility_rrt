@@ -14,6 +14,7 @@ Created on Jan 23, 2024
 
 """
 
+
 def angular_diff(a, b):
     """Angle difference from b to a (a - b)"""
     d = a - b
@@ -23,18 +24,23 @@ def angular_diff(a, b):
         d += 2 * math.pi
     return d
 
+
 def angle_normalize(x):
     return (((x + math.pi) % (2 * math.pi)) - math.pi)
 
 # Function to calculate the FOV triangle points
-def calculate_fov_points(position, yaw, fov_angle = math.pi/2, cam_range = 3):
+
+
+def calculate_fov_points(position, yaw, fov_angle=math.pi/2, cam_range=3):
     half_fov = fov_angle/2
     left_angle = yaw - half_fov
     right_angle = yaw + half_fov
 
     # Calculate points for the edges of the FOV
-    left_point = (position[0] + cam_range * math.cos(left_angle), position[1] + cam_range * math.sin(left_angle))
-    right_point = (position[0] + cam_range * math.cos(right_angle), position[1] + cam_range * math.sin(right_angle))
+    left_point = (position[0] + cam_range * math.cos(left_angle),
+                  position[1] + cam_range * math.sin(left_angle))
+    right_point = (position[0] + cam_range * math.cos(right_angle),
+                   position[1] + cam_range * math.sin(right_angle))
 
     return left_point, right_point
 
@@ -76,7 +82,7 @@ class Utils:
     def __init__(self):
         self.env = env.Env()
 
-        self.delta = 0.5
+        self.delta = 0.01
         self.obs_circle = self.env.obs_circle
         self.obs_rectangle = self.env.obs_rectangle
         self.obs_boundary = self.env.obs_boundary
@@ -187,6 +193,7 @@ class Utils:
     @staticmethod
     def get_dist(start, end):
         return math.hypot(end.x - start.x, end.y - start.y)
+
     @staticmethod
     def integrate_single_integrator(self, x_init, u, dt):
         # dimension 2, position [x1,x2]^T, control u = [u1,u2]^T, dt comes from control updates
@@ -201,20 +208,21 @@ class Utils:
             x_traj = np.concatenate((x_traj, x_current), axis=0)
         return x_traj
 
-
     @staticmethod
     def integrate_double_integrator(x_init, u, dt):
         # dimension 4, [x1,x2,x3,x4]^T [pos_1, vel_1, pos_2, vel_2]^T, control u = [u1,u2]^T, dt comes from control updates
-        x_traj = np.array([x_init],dtype=np.float32)
+        x_traj = np.array([x_init], dtype=np.float32)
         x_current = x_traj.copy()
         num_steps = len(u)
 
         for i in range(num_steps):
             u_current = u[i]
-            x_current[0,0] = x_current[0,0] + x_current[0,1] * dt + 0.5 * u_current[0] * dt ** 2
-            x_current[0,1] = x_current[0,1] + dt * u_current[0]
-            x_current[0,2] = x_current[0,2] + x_current[0,3] * dt + 0.5 * u_current[1] * dt ** 2
-            x_current[0,3] = x_current[0,3] + dt * u_current[1]
+            x_current[0, 0] = x_current[0, 0] + \
+                x_current[0, 1] * dt + 0.5 * u_current[0] * dt ** 2
+            x_current[0, 1] = x_current[0, 1] + dt * u_current[0]
+            x_current[0, 2] = x_current[0, 2] + \
+                x_current[0, 3] * dt + 0.5 * u_current[1] * dt ** 2
+            x_current[0, 3] = x_current[0, 3] + dt * u_current[1]
             x_traj = np.concatenate((x_traj, x_current), axis=0)
 
         return x_traj

@@ -31,6 +31,7 @@ Currently. only supports unicycle model with velocity control.
 @being-used-in: LQR_CBF_rrtStar.py
 """
 
+
 class LQR_CBF_Planner:
 
     def __init__(self, visibility=True, collision_cbf=True):
@@ -40,7 +41,7 @@ class LQR_CBF_Planner:
         self.DT = 0.1  # discretization step
 
         self.MAX_TIME = 4.0  # Maximum simulation time
-        self.GOAL_DIST = 0.6 # m
+        self.GOAL_DIST = 0.6  # m
 
         # LQR gain is invariant
         self.Q = np.matrix("0.5 0 0; 0 1 0; 0 0 0.01")
@@ -55,10 +56,10 @@ class LQR_CBF_Planner:
         self.collision_cbf = CBF(self.obs_circle)
         self.visibility_cbf = Visibility_CBF()
 
-        self.visibility_cbf_flag= visibility
+        self.visibility_cbf_flag = visibility
         self.collision_cbf_flag = collision_cbf
-        self.cx = 0.0 # critical point
-        self.cy = 0.0 
+        self.cx = 0.0  # critical point
+        self.cy = 0.0
 
     def compute_critical_point(self, rx, ry, ryaw, gx, gy, gtheta):
 
@@ -84,17 +85,20 @@ class LQR_CBF_Planner:
             tube_slope = math.tan(ryaw)
             if delta_theta > 0:
                 # Goal node is on the right side of the robot's heading angle
-                tube_y_intercept = ry - tube_slope * rx + tube_radius / math.cos(ryaw)
+                tube_y_intercept = ry - tube_slope * \
+                    rx + tube_radius / math.cos(ryaw)
             else:
                 # Goal node is on the left side of the robot's heading angle
-                tube_y_intercept = ry - tube_slope * rx - tube_radius / math.cos(ryaw)
+                tube_y_intercept = ry - tube_slope * \
+                    rx - tube_radius / math.cos(ryaw)
 
             cx = (tube_y_intercept - y_intercept) / (slope - tube_slope)
             cy = slope * cx + y_intercept
 
         # the critical point is in the FOV, but might or might not be in the current sensing range
         else:
-            MAX_DIST_CRITICAL = math.cos(math.pi/2 - fov_angle/2) * cam_range # 3 is range of the sensor
+            # 3 is range of the sensor
+            MAX_DIST_CRITICAL = math.cos(math.pi/2 - fov_angle/2) * cam_range
             dist_to_critical = math.hypot(gx-rx, gy-ry)
             dist_to_critical = min(dist_to_critical, MAX_DIST_CRITICAL)
             cx = rx + dist_to_critical * math.cos(gtheta)
@@ -102,8 +106,7 @@ class LQR_CBF_Planner:
 
         return cx, cy
 
-    
-    def lqr_cbf_planning(self, start_node, goal_node, LQR_gain, solve_QP = False, show_animation = True):
+    def lqr_cbf_planning(self, start_node, goal_node, LQR_gain, solve_QP=False, show_animation=True):
 
         sx = start_node.x
         sy = start_node.y
@@ -124,7 +127,6 @@ class LQR_CBF_Planner:
         # TODO: this does not necessary when only using QPConstraint
         self.collision_cbf.set_initial_state(np.array([sx, sy, stheta]))
         self.visibility_cbf.set_initial_state(np.array([sx, sy, stheta]))
-
 
         # Linearize system model
         xd = np.matrix([[gx], [gy], [gtheta]])
@@ -152,15 +154,16 @@ class LQR_CBF_Planner:
             fov_lines = []
             fov_fills = []
 
-        i = 0 # idx
+        i = 0  # idx
         time = 0.0
         while time <= self.MAX_TIME:
             time += self.DT
 
-            #MAX_DIST_CRITICAL = 5.0 # [m]
+            # MAX_DIST_CRITICAL = 5.0 # [m]
             cam_range = self.visibility_cbf.cam_range
 
-            cx, cy = self.compute_critical_point(rx[-1], ry[-1], ryaw[-1], gx, gy, gtheta)
+            cx, cy = self.compute_critical_point(
+                rx[-1], ry[-1], ryaw[-1], gx, gy, gtheta)
             self.cx = cx
             self.cy = cy
 
@@ -168,15 +171,15 @@ class LQR_CBF_Planner:
 
             x = xk - xd
             x[2, 0] = angular_diff(xk[2, 0], xd[2, 0])
-            #x = xd - xk
+            # x = xd - xk
             u = self.K[i] @ x
             # print("x ", x)
             # print("u ", u)
             # print("K ", self.K[i])
             i += 1
-            
+
             # animation
-            if show_animation: 
+            if show_animation:
                 # for stopping simulation with the 'esc' key
                 # Remove previous FOV and triangle
                 for line in fov_lines:
@@ -187,7 +190,7 @@ class LQR_CBF_Planner:
                 fov_fills.clear()
 
                 plt.gcf().canvas.mpl_connect('key_release_event',
-                        lambda event: [exit(0) if event.key == 'escape' else None])
+                                             lambda event: [exit(0) if event.key == 'escape' else None])
                 plt.plot(sx, sy, "or")
                 plt.plot(gx, gy, "ob")
                 plt.plot(cx, cy, "om")
@@ -196,35 +199,47 @@ class LQR_CBF_Planner:
                 robot_position = (rx[-1], ry[-1])
                 yaw = ryaw[-1]
 
-                robot_circle = plt.Circle(robot_position, 0.1, color='blue', fill=True)
+                robot_circle = plt.Circle(
+                    robot_position, 0.1, color='blue', fill=True)
                 plt.gca().add_patch(robot_circle)
 
                 # Draw the yaw line
-                yaw_line_end = (robot_position[0] + math.cos(yaw), robot_position[1] + math.sin(yaw))
-                plt.plot([robot_position[0], yaw_line_end[0]], [robot_position[1], yaw_line_end[1]], 'g-')
+                yaw_line_end = (
+                    robot_position[0] + math.cos(yaw), robot_position[1] + math.sin(yaw))
+                plt.plot([robot_position[0], yaw_line_end[0]], [
+                         robot_position[1], yaw_line_end[1]], 'g-')
 
                 # Calculate and draw the FOV
-                fov_left, fov_right = calculate_fov_points(robot_position, yaw, fov_angle=self.visibility_cbf.fov, cam_range=cam_range)
-                fov_lines.append(plt.plot([robot_position[0], fov_left[0]], [robot_position[1], fov_left[1]], 'k-')[0])
-                fov_lines.append(plt.plot([robot_position[0], fov_right[0]], [robot_position[1], fov_right[1]], 'k-')[0])
-                fov_lines.append(plt.plot([fov_left[0], fov_right[0]], [fov_left[1], fov_right[1]], 'k-')[0])
+                fov_left, fov_right = calculate_fov_points(
+                    robot_position, yaw, fov_angle=self.visibility_cbf.fov, cam_range=cam_range)
+                fov_lines.append(plt.plot([robot_position[0], fov_left[0]], [
+                                 robot_position[1], fov_left[1]], 'k-')[0])
+                fov_lines.append(plt.plot([robot_position[0], fov_right[0]], [
+                                 robot_position[1], fov_right[1]], 'k-')[0])
+                fov_lines.append(plt.plot([fov_left[0], fov_right[0]], [
+                                 fov_left[1], fov_right[1]], 'k-')[0])
 
-                # Calculate FOV points at the start position 
-                fov_left_init, fov_right_init = calculate_fov_points((rx[0], ry[0]), gtheta, fov_angle=self.visibility_cbf.fov, cam_range=cam_range)
+                # Calculate FOV points at the start position
+                fov_left_init, fov_right_init = calculate_fov_points(
+                    (rx[0], ry[0]), gtheta, fov_angle=self.visibility_cbf.fov, cam_range=cam_range)
 
                 # Calculate FOV points at the current position
-                current_fov_left, current_fov_right = calculate_fov_points(robot_position, gtheta, fov_angle=self.visibility_cbf.fov, cam_range=cam_range)
+                current_fov_left, current_fov_right = calculate_fov_points(
+                    robot_position, gtheta, fov_angle=self.visibility_cbf.fov, cam_range=cam_range)
 
                 # Draw dashed lines for the FOV boundaries
-                fov_lines.append(plt.plot([fov_left_init[0], current_fov_left[0]], [fov_left_init[1], current_fov_left[1]], 'k--', alpha=0.5)[0])
-                fov_lines.append(plt.plot([fov_right_init[0], current_fov_right[0]], [fov_right_init[1], current_fov_right[1]], 'k--', alpha=0.5)[0])
+                fov_lines.append(plt.plot([fov_left_init[0], current_fov_left[0]], [
+                                 fov_left_init[1], current_fov_left[1]], 'k--', alpha=0.5)[0])
+                fov_lines.append(plt.plot([fov_right_init[0], current_fov_right[0]], [
+                                 fov_right_init[1], current_fov_right[1]], 'k--', alpha=0.5)[0])
 
                 # Fill the FOV tube
                 fov_fills.append(plt.fill([fov_left_init[0], current_fov_left[0], current_fov_right[0], fov_right_init[0]],
-                        [fov_left_init[1], current_fov_left[1], current_fov_right[1], fov_right_init[1]], 'grey', alpha=0.1)[0])
+                                          [fov_left_init[1], current_fov_left[1], current_fov_right[1], fov_right_init[1]], 'grey', alpha=0.1)[0])
 
                 # Fill the FOV triangle
-                fov_fills.append(plt.fill([robot_position[0], fov_left[0], fov_right[0]], [robot_position[1], fov_left[1], fov_right[1]], 'k', alpha=0.1)[0])
+                fov_fills.append(plt.fill([robot_position[0], fov_left[0], fov_right[0]], [
+                                 robot_position[1], fov_left[1], fov_right[1]], 'k', alpha=0.1)[0])
 
                 plt.axis("equal")
                 plt.title("iteration: {}".format(i))
@@ -233,41 +248,44 @@ class LQR_CBF_Planner:
                 plt.pause(0.5)
 
             if solve_QP:
-                #solve QP with CBF, update control input u
+                # solve QP with CBF, update control input u
                 try:
-                    u = np.array(u).squeeze() # convert matrix to array
-                    u = self.collision_cbf.QP_controller([x[0, 0] + gx, x[1, 0] + gy, x[2, 0] + gtheta], u, model = "unicycle")
-                    u = np.matrix(u).reshape(2, -1) # convert array to matrix
+                    u = np.array(u).squeeze()  # convert matrix to array
+                    u = self.collision_cbf.QP_controller(
+                        [x[0, 0] + gx, x[1, 0] + gy, x[2, 0] + gtheta], u, model="unicycle")
+                    u = np.matrix(u).reshape(2, -1)  # convert array to matrix
                 except:
                     print('The CBF-QP at current steering step is infeasible')
                     break
             else:
                 # check if LQR control input is safe with respect to CBF constraint, not solving QP
                 if self.collision_cbf_flag:
-                    collision_cbf_constraint = self.collision_cbf.QP_constraint([x[0, 0] + gx, x[1, 0] + gy, x[2, 0] + gtheta], u, model = "unicycle_velocity_control")
+                    collision_cbf_constraint = self.collision_cbf.QP_constraint(
+                        [x[0, 0] + gx, x[1, 0] + gy, x[2, 0] + gtheta], u, model="unicycle_velocity_control")
                     if not collision_cbf_constraint:
-                        #print("violated collision cbf constraint")
+                        # print("violated collision cbf constraint")
                         break
                 if self.visibility_cbf_flag:
-                    visibility_cbf_constraint = self.visibility_cbf.QP_constraint([x[0, 0] + gx, x[1, 0] + gy, x[2, 0] + gtheta], u, model = "unicycle_velocity_control")
+                    visibility_cbf_constraint = self.visibility_cbf.QP_constraint(
+                        [x[0, 0] + gx, x[1, 0] + gy, x[2, 0] + gtheta], u, model="unicycle_velocity_control")
                     if not visibility_cbf_constraint:
-                    #print("violated visibility cbf constraint")
-                    # violate either of constraint
+                        # print("violated visibility cbf constraint")
+                        # violate either of constraint
                         break
 
             # update current state
-            xk = self.A @ xk + self.B @ u 
-            theta_k = angle_normalize(xk[2,0])
-            xk[2,0] = theta_k
+            xk = self.A @ xk + self.B @ u
+            theta_k = angle_normalize(xk[2, 0])
+            xk[2, 0] = theta_k
 
             # if collisino_cbf_flag is false, then do normal collision check
             if not self.collision_cbf_flag:
-                collision = self.collision_cbf.collision_check([xk[0, 0], xk[1, 0], xk[2,0]], model = "unicycle_velocity_control")
+                collision = self.collision_cbf.collision_check(
+                    [xk[0, 0], xk[1, 0], xk[2, 0]], model="unicycle_velocity_control")
                 if collision:
                     # print(xk[0, 0], xk[1, 0])
                     # print("collision")
                     break
-                
 
             rx.append(xk[0, 0])
             ry.append(xk[1, 0])
@@ -281,7 +299,6 @@ class LQR_CBF_Planner:
                 # print('errors ', d)
                 break
 
-
         if show_animation:
             # Remove previous FOV and triangle
             for line in fov_lines:
@@ -292,12 +309,11 @@ class LQR_CBF_Planner:
             fov_fills.clear()
 
         if not found_path:
-            #print("Cannot found !!")
+            # print("Cannot found !!")
             return [rx, ry, ryaw], error, found_path
 
-        #print("Fonud path to goal")
+        # print("Fonud path to goal")
         return [rx, ry, ryaw], error, found_path
-
 
     def finite_dLQR(self, A, B, Q, R):
         """
@@ -313,12 +329,12 @@ class LQR_CBF_Planner:
         for i in range(N, 0, -1):
             # state cost matrix
             P[i-1] = Q + A.T @ P[i] @ A - (A.T @ P[i] @ B) @ np.linalg.pinv(
-                R + B.T @ P[i] @ B) @ (B.T @ P[i] @ A)   
+                R + B.T @ P[i] @ B) @ (B.T @ P[i] @ A)
 
         K = []
         for i in range(0, N, 1):
             K.append(-np.linalg.inv(R + B.T @ P[i] @ B) @ B.T @ P[i] @ A)
-        
+
         return K
 
     def infinite_dLQR(self, A, B, Q, R):
@@ -333,9 +349,9 @@ class LQR_CBF_Planner:
         # compute the LQR gain
         K = np.matrix(scipy.linalg.inv(B.T*P*B+R)*(B.T*P*A))
 
-        #eigVals, eigVecs = scipy.linalg.eig(A-B*K)        
+        # eigVals, eigVecs = scipy.linalg.eig(A-B*K)
         return -K
-    
+
     def get_linear_model(self, x_bar, u_bar):
         """
         Computes the Discrete-time LTI approximated state space model x' = Ax + Bu + C
@@ -363,11 +379,11 @@ class LQR_CBF_Planner:
             [v * np.cos(theta), v * np.sin(theta), theta]
         ).reshape(self.N, 1)
         C_lin = self.DT * (
-            f_xu - np.dot(A, x_bar.reshape(self.N, 1)) - np.dot(B, u_bar.reshape(self.M, 1))
+            f_xu - np.dot(A, x_bar.reshape(self.N, 1)) -
+            np.dot(B, u_bar.reshape(self.M, 1))
         )
 
         return np.round(A_lin, 4), np.round(B_lin, 4), np.round(C_lin, 4)
-
 
 
 if __name__ == '__main__':
@@ -385,7 +401,7 @@ if __name__ == '__main__':
     lqr_cbf_planner = LQR_CBF_Planner(visibility=True)
 
     # initialize a hash table for storing LQR gain
-    # TODO: this should be modified to be optional 
+    # TODO: this should be modified to be optional
     LQR_gain = dict()
 
     for i in range(ntest):
@@ -400,14 +416,15 @@ if __name__ == '__main__':
 
         # add a small noise to the stheta
         stheta += random.uniform(-math.pi/2, math.pi/2)
-        #stheta -= math.radians(75/2) + 0.4 # for testing
+        # stheta -= math.radians(75/2) + 0.4 # for testing
 
         start_node = Node([sx, sy, stheta])
         goal_node = Node([gx, gy])
 
         print("goal", gy, gx)
 
-        rtraj, error, foundpath = lqr_cbf_planner.lqr_cbf_planning(start_node, goal_node, LQR_gain=LQR_gain, solve_QP = SOLVE_QP, show_animation=SHOW_ANIMATION)
+        rtraj, error, foundpath = lqr_cbf_planner.lqr_cbf_planning(
+            start_node, goal_node, LQR_gain=LQR_gain, solve_QP=SOLVE_QP, show_animation=SHOW_ANIMATION)
         rx, ry, ryaw = rtraj
 
         print("time of running LQR: ", time.time() - start_time)
@@ -420,11 +437,10 @@ if __name__ == '__main__':
             print(lqr_cbf_planner.cx, lqr_cbf_planner.cy)
             ax1.plot(rx, ry, "-r")
             ax1.grid()
-            
+
             ax2.plot(error, label="errors")
             ax2.legend(loc='upper right')
             ax2.grid()
             plt.show()
 
     print("end main")
-
