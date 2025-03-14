@@ -1,6 +1,20 @@
-# visibility-rrt
+# visibility_rrt
 
-This repository contains the implementation of the Visibility-Aware RRT* algorithm, a sampling-based path planning method that generates safe and efficient global reference paths for robots with limited sensing capabilities in partially unknown environments. The algorithm incorporates a collision avoidance Control Barrier Function (CBF) and a novel visibility CBF to ensure that the generated paths are not only collision-free but also respect the robot's limited perception capabilities. See our paper for more details.
+This repository contains the implementation of the Visibility-Aware RRT* algorithm, a sampling-based path planning method that generates safe and efficient global reference paths for robots with limited sensing capabilities in partially unknown environments. The algorithm incorporates a collision avoidance Control Barrier Function (CBF) and a novel visibility CBF to ensure that the generated paths are not only collision-free but also respect the robot's limited perception capabilities. Please see our paper ["Visibility-Aware RRT* for Safety-Critical Navigation of Perception-Limited Robots in Unknown Environments"]() for more details.
+
+
+<div align="center">
+<img src="https://github.com/user-attachments/assets/7d889ef0-ca4e-4788-9b11-7d37fea916a6" width="700px">
+
+<div align="center">
+
+[[Homepage]](https://www.taekyung.me/visibility-rrt)
+[[Arxiv]](https://arxiv.org/abs/2406.07728)
+[[Video]](https://youtu.be/l4vlMTf8s74)
+[[Research Group]](https://dasc-lab.github.io/)
+
+</div>
+</div>
 
 # Installation
 
@@ -147,14 +161,15 @@ See our paper for further information.
 If you find this repository useful, please consider citing our paper:
 
 ```
-@inproceedings{kim2024visibility-aware, 
+@article
+{kim2025visibility-aware, 
     author    = {Taekyung Kim and Dimitra Panagou},
-    title     = {{Visibility-Aware RRT* for Safety-Critical Navigation of Perception-Limited Robots in Unknown Environments}}, 
-    booktitle = {{arXiv} preprint {arXiv}:2406.07728},
+    title     = {{Visibility-Aware RRT* for Safety-Critical Navigation of Perception-Limited Robots in Unknown Environments}},
+    journal = {IEEE Robotics and Automation Letters},
     shorttitle = {{Visibility}-{RRT}*},
-    year      = {2024},
-    month     = {June}
+    year      = {2025}
 }
+
 ```
 
 # Related Works
