@@ -161,8 +161,7 @@ See our paper for further information.
 If you find this repository useful, please consider citing our paper:
 
 ```
-@article
-{kim2025visibility-aware, 
+@article{kim2025visibility-aware, 
     author    = {Taekyung Kim and Dimitra Panagou},
     title     = {{Visibility-Aware RRT* for Safety-Critical Navigation of Perception-Limited Robots in Unknown Environments}},
     journal = {IEEE Robotics and Automation Letters},
