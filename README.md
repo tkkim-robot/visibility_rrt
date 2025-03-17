@@ -1,6 +1,6 @@
 # visibility_rrt
 
-This repository contains the implementation of the Visibility-Aware RRT* algorithm, a sampling-based path planning method that generates safe and efficient global reference paths for robots with limited sensing capabilities in partially unknown environments. The algorithm incorporates a collision avoidance Control Barrier Function (CBF) and a novel visibility CBF to ensure that the generated paths are not only collision-free but also respect the robot's limited perception capabilities. Please see our paper ["Visibility-Aware RRT* for Safety-Critical Navigation of Perception-Limited Robots in Unknown Environments"]() for more details.
+This repository contains the implementation of the Visibility-Aware RRT* algorithm, a sampling-based path planning method that generates safe and efficient global reference paths for robots with limited sensing capabilities in partially unknown environments. The algorithm incorporates a collision avoidance Control Barrier Function (CBF) and a novel visibility CBF to ensure that the generated paths are not only collision-free but also respect the robot's limited perception capabilities. Please see our paper ["Visibility-Aware RRT* for Safety-Critical Navigation of Perception-Limited Robots in Unknown Environments"](https://ieeexplore.ieee.org/document/10930526) for more details.
 
 
 <div align="center">
@@ -10,6 +10,7 @@ This repository contains the implementation of the Visibility-Aware RRT* algorit
 
 [[Homepage]](https://www.taekyung.me/visibility-rrt)
 [[Arxiv]](https://arxiv.org/abs/2406.07728)
+[[Paper]](https://ieeexplore.ieee.org/document/10930526)
 [[Video]](https://youtu.be/l4vlMTf8s74)
 [[Research Group]](https://dasc-lab.github.io/)
 
