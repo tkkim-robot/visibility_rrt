@@ -171,7 +171,7 @@ If you find this repository useful, please consider citing our paper:
     volume = {10},
     number = {5},
     pages = {4508--4515},
-    doi = {10.48550/arXiv.2406.07728},
+    doi = {10.1109/LRA.2025.3552295},
 }
 
 ```
