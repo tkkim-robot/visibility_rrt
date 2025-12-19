@@ -19,9 +19,16 @@ This repository contains the implementation of the Visibility-Aware RRT* algorit
 
 # Installation
 
-This repositry only requires common libraries: `numpy`, `matplotlib`, and `scipy`. 
+This repository uses `uv` for dependency management. 
+To install the dependencies, run:
 
-For running CBF-QP, it requires `cvxpy`, `gurobipy`, and `shapely`.
+```bash
+uv sync
+```
+
+This repository requires common libraries: `numpy`, `matplotlib`, and `scipy`, `shapely`.
+For running CBF-QP, it requires `cvxpy`, `gurobipy`.
+It also uses `safe_control` library as a submodule.
 
 # How to Run Example
 

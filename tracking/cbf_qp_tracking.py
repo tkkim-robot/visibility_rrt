@@ -1,10 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-import cvxpy as cp
 import os
 import glob
 import subprocess
+from safe_control.tracking import LocalTrackingController
 
 """
 Created on Feb 8, 2024
@@ -13,8 +12,9 @@ Created on Feb 8, 2024
 @description: This code implements a CBF-QP controller that tracks a set of waypoints.
 It provides two dynamics models: Unicycle2D and DynamicUnicycle2D.
 It has useful tools to analyze the union of sensing footprints and the safety of the robot.
+This file has been refactored to use the safe_control library.
 
-@required-scripts: robot.py
+@required-scripts: safe_control submodule
 """
 
 class UnicyclePathFollower:
@@ -24,113 +24,93 @@ class UnicyclePathFollower:
         self.waypoints = waypoints
         self.dt = dt
         self.tf = tf
-
-        self.current_goal_index = 0  # Index of the current goal in the path
-        self.reached_threshold = 1.0
-
-        if self.type == 'Unicycle2D':
-            self.alpha = 1.0
-            self.v_max = 1.0
-            self.w_max = 0.5
-        elif self.type == 'DynamicUnicycle2D':
-            self.alpha1 = 1.5
-            self.alpha2 = 1.5
-            # v_max is set to 1.0 inside the robot class
-            self.a_max = 0.5
-            self.w_max = 0.5
-            X0 = np.array([X0[0], X0[1], X0[2], 0.0]).reshape(-1, 1)
-
-        self.show_animation = show_animation
+        
         self.plotting = plotting
-        self.obs = np.array(env.obs_circle)
-        self.unknown_obs = None
-
+        self.env = env
+        
+        # Map parameters to safe_control robot_spec
+        self.robot_spec = {}
+        if self.type == 'Unicycle2D':
+            self.robot_spec['model'] = 'Unicycle2D'
+            self.robot_spec['v_max'] = 1.0
+            self.robot_spec['w_max'] = 0.5
+            self.robot_spec['radius'] = 0.25
+        elif self.type == 'DynamicUnicycle2D':
+            self.robot_spec['model'] = 'DynamicUnicycle2D'
+            self.robot_spec['a_max'] = 0.5
+            self.robot_spec['w_max'] = 0.5
+            self.robot_spec['v_max'] = 1.0 
+            self.robot_spec['radius'] = 0.25
+            
+        # Initialize plotting if needed
+        self.fig = None
+        self.ax = None
         if show_animation:
-            # Initialize plotting
             if self.plotting is None:
                 self.fig = plt.figure()
                 self.ax = plt.axes()
             else:
-                # plot the obstacles
                 self.ax, self.fig = self.plotting.plot_grid("Path Following")
-            plt.ion()
-            self.ax.set_xlabel("X")
-            self.ax.set_ylabel("Y")
-            self.ax.set_aspect(1)
-
-            # Visualize goal and obstacles
-            self.ax.scatter(waypoints[:, 0], waypoints[:, 1], c='g', s=10)
         else:
-            self.ax = plt.axes() # dummy placeholder
+            self.ax = plt.axes() # dummy
+            
+        # Controller configuration
+        controller_type = {
+            'pos': 'cbf_qp',
+            'att': 'velocity_tracking_yaw' 
+        }
+        
+        # Ensure X0 has correct dimension for the model
+        if self.robot_spec['model'] == 'Unicycle2D':
+            if X0.size == 2:
+                # [x, y] -> [x, y, 0]
+                X0 = np.pad(X0, (0, 1), 'constant')
+        elif self.robot_spec['model'] == 'DynamicUnicycle2D':
+            if X0.size == 2:
+                # [x, y] -> [x, y, 0, 0]
+                X0 = np.pad(X0, (0, 2), 'constant')
+            elif X0.size == 3:
+                # [x, y, theta] -> [x, y, theta, 0]
+                X0 = np.pad(X0, (0, 1), 'constant')
 
-        # Setup control problem
-        self.setup_robot(X0)
-        self.setup_control_problem()
-
-    def setup_robot(self, X0):
-        try:
-            from tracking.robot import BaseRobot
-        except ImportError:
-            from robot import BaseRobot
-        self.robot = BaseRobot(X0.reshape(-1, 1), self.dt, self.ax, self.type)
-
-    def setup_control_problem(self):
-        self.u = cp.Variable((2, 1))
-        self.u_ref = cp.Parameter((2, 1), value=np.zeros((2, 1)))
-        self.A1 = cp.Parameter((1, 2), value=np.zeros((1, 2)))
-        self.b1 = cp.Parameter((1, 1), value=np.zeros((1, 1)))
-        objective = cp.Minimize(cp.sum_squares(self.u - self.u_ref))
-
-        if self.type == 'Unicycle2D':
-            constraints = [self.A1 @ self.u + self.b1 >= 0,
-                           cp.abs(self.u[0]) <= self.v_max,
-                           cp.abs(self.u[1]) <= self.w_max]
-        elif self.type == 'DynamicUnicycle2D':
-            constraints = [self.A1 @ self.u + self.b1 >= 0,
-                            cp.abs(self.u[0]) <= self.a_max,
-                            cp.abs(self.u[1]) <= self.w_max]
-        self.cbf_controller = cp.Problem(objective, constraints)
-
-    def goal_reached(self, current_position, goal_position):
-        return np.linalg.norm(current_position[:2] - goal_position[:2]) < self.reached_threshold
+        self.controller = LocalTrackingController(
+            X0=X0,
+            robot_spec=self.robot_spec,
+            controller_type=controller_type,
+            dt=self.dt,
+            show_animation=show_animation,
+            save_animation=False, 
+            ax=self.ax,
+            fig=self.fig,
+            env=self.env
+        )
+        
+        # Safe Control expects obstacles to have specific format (7 elements), but utils.env provides [x,y,r]
+        if self.controller.obs is not None and self.controller.obs.size > 0:
+            if self.controller.obs.ndim == 1:
+                self.controller.obs = self.controller.obs.reshape(1, -1)
+            
+            if self.controller.obs.shape[1] == 3:
+                 # Pad to 7 columns: [x, y, r, 0, 0, 0, 0]
+                 padding = np.zeros((self.controller.obs.shape[0], 4))
+                 self.controller.obs = np.hstack((self.controller.obs, padding))
+        
+        
+        # Set waypoints in the controller
+        self.controller.set_waypoints(waypoints)
+        
+        # Additional state for compatibility
+        self.unknown_obs = None
+        
+        # Expose robot for external access
+        self.robot = self.controller.robot
+        # Set test_type on robot if needed for visualization logic in original code
+        self.robot.test_type = 'cbf_qp' 
 
     def set_unknown_obs(self, unknown_obs):
-        # set initially
         self.unknown_obs = unknown_obs
-        for (ox, oy, r) in self.unknown_obs :
-            self.ax.add_patch(
-                patches.Circle(
-                    (ox, oy), r,
-                    edgecolor='black',
-                    facecolor='orange',
-                    fill=True,
-                    alpha=0.4
-                )
-            )
+        self.controller.set_unknown_obs(unknown_obs)
         self.robot.test_type = 'cbf_qp'
-
-    def get_nearest_obs(self, detected_obs):
-        # if there was new obstacle detected, update the obs
-        if len(detected_obs) != 0:
-            all_obs = np.vstack((self.obs, detected_obs))
-            return np.array(detected_obs).reshape(-1, 1)
-        else:
-            all_obs = self.obs
-
-        radius = all_obs[:, 2]
-        distances = np.linalg.norm(all_obs[:, :2] - self.robot.X[:2].T, axis=1)
-        min_distance_index = np.argmin(distances-radius)
-        nearest_obstacle = all_obs[min_distance_index]
-        return nearest_obstacle.reshape(-1, 1)
-    
-    def is_collide_unknown(self):
-        if self.unknown_obs is None:
-            return False
-        for obs in self.unknown_obs:
-            # check if the robot collides with the obstacle
-            robot_radius = self.robot.robot_radius
-            distance = np.linalg.norm(self.robot.X[:2] - obs[:2])
-            return distance < obs[2] + robot_radius
 
 
     def run(self, save_animation=False):
@@ -140,100 +120,45 @@ class UnicyclePathFollower:
         early_violation = 0
         unexpected_beh = 0
 
-        ani_idx = 0
-        for i in range(int(self.tf / self.dt)):
-            if self.goal_reached(self.robot.X, np.array(self.waypoints[self.current_goal_index]).reshape(-1, 1)):
-                self.current_goal_index += 1
-                # Check if all waypoints are reached; if so, stop the loop
-                if self.current_goal_index >= len(self.waypoints):
-                    print("All waypoints reached.")
-                    break
-                else:
-                    #print(f"Moving to next waypoint: {self.waypoints[self.current_goal_index]}")
-                    pass
+        self.controller.save_animation = save_animation
+        if save_animation:
+            self.controller.setup_animation_saving()
 
-            goal = np.array(self.waypoints[self.current_goal_index][0:2]) # set goal to next waypoint's (x,y)
-
-            detected_obs = self.robot.detect_unknown_obs(self.unknown_obs)
-
-            nearest_obs = self.get_nearest_obs(detected_obs)
-            self.u_ref.value = self.robot.nominal_input(goal)
-            if self.type == 'Unicycle2D':
-                h, dh_dx = self.robot.agent_barrier(nearest_obs)
-                self.A1.value[0,:] = dh_dx @ self.robot.g()
-                self.b1.value[0,:] = dh_dx @ self.robot.f() + self.alpha * h
-            elif self.type == 'DynamicUnicycle2D':
-                h, h_dot, dh_dot_dx = self.robot.agent_barrier(nearest_obs)
-                self.A1.value[0,:] = dh_dot_dx @ self.robot.g()
-                self.b1.value[0,:] = dh_dot_dx @ self.robot.f() + (self.alpha1+self.alpha2) * h_dot + self.alpha1*self.alpha2*h
-
-            self.cbf_controller.solve(solver=cp.GUROBI, reoptimize=True)
-            collide = self.is_collide_unknown()
-
-            if self.cbf_controller.status != 'optimal' or collide:
-                print("ERROR in QP")
-                unexpected_beh = -1 # reutn with error
-                if self.show_animation:
-                    self.robot.render_plot()
-                    current_position = self.robot.X[:2].flatten()
-                    self.ax.text(current_position[0]+0.5, current_position[1]+0.5, '!', color='red', weight='bold', fontsize=22)
-                    self.fig.canvas.draw()
-                    # self.fig.canvas.flush_events() # in newer matplotlib (>3.8.0), this line freezes the animation
-                    plt.pause(5)
-
-                if save_animation:
-                    current_directory_path = os.getcwd() 
-                    if not os.path.exists(current_directory_path + "/output/animations"):
-                        os.makedirs(current_directory_path + "/output/animations")
-                    plt.savefig(current_directory_path +
-                                "/output/animations/" + "t_step_" + str(ani_idx) + ".png")
+        max_steps = int(self.tf / self.dt)
+        
+        for i in range(max_steps):
+            # Control step
+            ret = self.controller.control_step()
+            
+            if ret == -2:
+                print("ERROR in QP or Collision")
+                unexpected_beh = -1
                 break
-
-            self.robot.step(self.u.value)
-            if self.show_animation:
-                self.robot.render_plot()
-
-            # update FOV
-            self.robot.update_frontier()
-            self.robot.update_safety_area()
-            if self.current_goal_index > 5: # exclude the first 1 seconds
-                beyond_flag = self.robot.is_beyond_frontier()
+            
+            # Draw plot
+            self.controller.draw_plot(pause=0.01)
+            
+            # Logic for compatibility:
+            beyond_flag = 1 if ret == 1 else 0
+            
+            if self.controller.current_goal_index > 5:
                 if i < int(5.0 / self.dt):
-                    early_violation += beyond_flag
-                unexpected_beh += beyond_flag
-                if beyond_flag and self.show_animation:
+                     early_violation += beyond_flag
+                unexpected_beh += beyond_flag 
+                
+                if beyond_flag and self.controller.show_animation:
                     print("Cumulative unexpected behavior: {}".format(unexpected_beh))
 
-            if self.show_animation:
-                self.fig.canvas.draw()
-                #self.fig.canvas.flush_events()  # in newer matplotlib (>3.8.0), this line freezes the animation
-                plt.pause(0.01)
+            if ret == -1: # All waypoints reached
+                print("All waypoints reached.")
+                break
 
-                if save_animation and i%2==0:
-                    current_directory_path = os.getcwd() 
-                    if not os.path.exists(current_directory_path + "/output/animations"):
-                        os.makedirs(current_directory_path + "/output/animations")
-                    plt.savefig(current_directory_path +
-                                "/output/animations/" + "t_step_" + str(ani_idx) + ".png")
-                    ani_idx += 1
-
-        if self.show_animation and save_animation:
-            subprocess.call(['ffmpeg',
-                            '-i', current_directory_path+"/output/animations/" + "/t_step_%01d.png",
-                            '-r', '60',  # Changes the output FPS to 30
-                            '-pix_fmt', 'yuv420p',
-                            current_directory_path+"/output/animations/tracking.mp4"])
-
-            for file_name in glob.glob(current_directory_path +
-                            "/output/animations/*.png"):
-                os.remove(file_name)
+        if save_animation:
+             self.controller.export_video()
 
         print("=====   Simulation finished  =====")
         print("===================================\n")
-        if self.show_animation:
-            plt.ioff()
-            plt.close()
-
+        
         return unexpected_beh, early_violation
 
 if __name__ == "__main__":
@@ -245,27 +170,25 @@ if __name__ == "__main__":
     from utils import plotting
     from utils import env
 
-
     env_type = env.type
-    
     if env_type == 1:
         tf = 100
     elif env_type == 2:
         tf = 30
+        
+    try:
+        if env_type == 1:
+            path_to_continuous_waypoints = os.getcwd()+"/output/240312-2128_large_env/state_traj.npy"
+        elif env_type == 2:
+            path_to_continuous_waypoints = os.getcwd()+"/output/240225-0430/state_traj.npy"
+        
+        waypoints = np.load(path_to_continuous_waypoints, allow_pickle=True)
+        waypoints = np.array(waypoints, dtype=np.float64)
+    except FileNotFoundError:
+        print("Waypoint file not found, generating dummy waypoints for testing.")
+        waypoints = np.array([[0,0], [1,1], [2,2], [3,3]], dtype=np.float64)
+        path_to_continuous_waypoints = None
 
-    num_steps = int(tf/dt)
-
-    if env_type == 1:
-        path_to_continuous_waypoints = os.getcwd()+"/output/240312-2128_large_env/state_traj.npy"
-
-    elif env_type == 2:
-        path_to_continuous_waypoints = os.getcwd()+"/output/240225-0430/state_traj.npy"
-
-
-    waypoints = np.load(path_to_continuous_waypoints, allow_pickle=True)
-    waypoints = np.array(waypoints, dtype=np.float64)
-
-    print(waypoints[-1])
     x_init = waypoints[0]
     x_goal = waypoints[-1]
 
@@ -278,16 +201,6 @@ if __name__ == "__main__":
                                          show_animation=True,
                                          plotting=plot_handler,
                                          env=env_handler)
-    # randomly generate 5 unknown obstacles
-    x_range = env_handler.x_range
-    y_range = env_handler.y_range
-    # unknown_obs = np.random.uniform(low=[x_range[0], y_range[0], 0], high=[x_range[1], y_range[1], 0], size=(20, 3))
-    # unknown_obs[:, 2] = 0.5
-    # unknown_obs = np.vstack((unknown_obs, [
-    #                     [10, 8, 0.5],
-    #                     [10.5, 8, 0.5],
-    #                     [11, 8, 0.5]])
-    # )
 
     if env_type == 1:
         unknown_obs = np.array([[13.0, 10.0, 0.5],
@@ -299,4 +212,4 @@ if __name__ == "__main__":
         unknown_obs = np.array([[9.0, 8.8, 0.3]]) 
 
     path_follower.set_unknown_obs(unknown_obs)
-    unexpected_beh = path_follower.run(save_animation=True)
+    unexpected_beh, early_violation = path_follower.run(save_animation=False)
