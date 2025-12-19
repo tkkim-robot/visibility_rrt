@@ -186,3 +186,8 @@ If you find this repository useful, please consider citing our paper:
 # Related Works
 
 This repository was built based on the [implementation of LQR_CBF_rrtStar](https://github.com/mingyucai/LQR_CBF_rrtStar), that I had contributed before. Thanks for the great work of [gy2256](https://github.com/gy2256) and [mingyucai](https://github.com/mingyucai).
+
+
+## Library
+
+This repository uses [safe_control](https://github.com/tkkim-robot/safe_control), a python library for general safety-critical controllers. 
