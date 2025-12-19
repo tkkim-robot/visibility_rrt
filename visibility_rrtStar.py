@@ -333,4 +333,4 @@ if __name__ == '__main__':
                                          show_animation=SHOW_ANIMATION,
                                          plotting=lqr_rrt_star.plotting,
                                          env=lqr_rrt_star.env)
-    unexpected_beh = path_follower.run(save_animation=True)
+    unexpected_beh = path_follower.run(save_animation=False)

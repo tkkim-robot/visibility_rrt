@@ -1,0 +1,3 @@
+[submodule "safe_control"]
+	path = safe_control
+	url = https://github.com/tkkim-robot/safe_control.git

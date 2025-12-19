@@ -1,0 +1,28 @@
+[project]
+name = "visibility_rrt"
+version = "0.1.0"
+description = "Visibility RRT project using Safe Control Library"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy==1.26.4",
+    "scipy",
+    "matplotlib",
+    "cvxpy",
+    "gurobipy",
+    "shapely",
+    "safe_control",
+    "seaborn",
+    "stopit",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["visibility_rrt", "tracking", "utils"]
+package-dir = {"visibility_rrt" = "."}
+
+[tool.uv]
+sources = { safe_control = { path = "./safe_control", editable = true } }
