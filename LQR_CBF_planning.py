@@ -12,8 +12,10 @@ from utils.node import Node
 from utils.utils import angular_diff, angle_normalize, calculate_fov_points
 
 """
+
 Created on Jan 22, 2024
 @author: Taekyung Kim
+@modified-by: Ihab S. Mohamed (Indiana University -- Bloomington) - Jan 2026
 
 @description: This code implements a discrete-time finite horizon LQR with unicycle model using velocity control. 
 This code also provides a path planning function with the computed LQR gain, both using QP and not using QP.
@@ -29,11 +31,19 @@ Currently. only supports unicycle model with velocity control.
 @required-scripts: cbf.py, visibility_cbf.py, env.py
 
 @being-used-in: LQR_CBF_rrtStar.py
+
+@update: Updated version addressing five critical issues:
+    1. Fixed LQR gain calculation to use P[i+1] instead of P[i] (Principle of Optimality)
+    2. Fixed Jacobian linearization error: A[1,2] now uses v*cos(theta) instead of v*sin(theta)
+    3. Fixed linearization at zero velocity: now uses non-zero reference velocity (1.0) to maintain controllability
+    4. Fixed affine linearization offset: f_xu third element now uses yaw (control input) instead of theta (state)
+    5. Changed state propagation to use nonlinear dynamics instead of linearized model for better accuracy
+    
 """
 
 class LQR_CBF_Planner:
 
-    def __init__(self, visibility=True, collision_cbf=True):
+    def __init__(self, visibility=False, collision_cbf=False):
 
         self.N = 3  # number of state variables
         self.M = 2  # number of control variables
@@ -43,8 +53,9 @@ class LQR_CBF_Planner:
         self.GOAL_DIST = 0.6 # m
 
         # LQR gain is invariant
-        self.Q = np.matrix("0.5 0 0; 0 1 0; 0 0 0.01")
-        self.R = np.matrix("0.1 0; 0 0.01")
+    
+        self.Q = np.matrix("25 0 0; 0 25 0; 0 0 100")  
+        self.R = np.matrix("5.0 0; 0 0.05")  
 
         # initialize CBF
         self.env = env.Env()
@@ -57,7 +68,7 @@ class LQR_CBF_Planner:
 
         self.visibility_cbf_flag= visibility
         self.collision_cbf_flag = collision_cbf
-        self.cx = 0.0 # critical point
+        self.cx = 0.0 # Critical point
         self.cy = 0.0 
 
     def compute_critical_point(self, rx, ry, ryaw, gx, gy, gtheta):
@@ -127,8 +138,10 @@ class LQR_CBF_Planner:
 
 
         # Linearize system model
+        # FIX 3: Use non-zero reference velocity to maintain controllability
+        # Using v=1.0 preserves coupling between heading and position in the Jacobian
         xd = np.matrix([[gx], [gy], [gtheta]])
-        ud = np.matrix([[0], [0]])
+        ud = np.matrix([[1.0], [0]])  # Changed from [[0], [0]]
         self.A, self.B, self.C = self.get_linear_model(xd, ud)
 
         # Check the hash table to store LQR feedback Gain
@@ -256,7 +269,16 @@ class LQR_CBF_Planner:
                         break
 
             # update current state
-            xk = self.A @ xk + self.B @ u 
+            # Linear form (original)
+            # xk = self.A @ xk + self.B @ u 
+            
+            # FIX 5: Use nonlinear dynamics for state propagation instead of linearized model
+            v = u[0, 0]
+            yaw = u[1, 0]
+            xk[0, 0] = xk[0, 0] + self.DT * v * np.cos(xk[2, 0])
+            xk[1, 0] = xk[1, 0] + self.DT * v * np.sin(xk[2, 0])
+            xk[2, 0] = xk[2, 0] + self.DT * yaw
+            
             theta_k = angle_normalize(xk[2,0])
             xk[2,0] = theta_k
 
@@ -302,6 +324,10 @@ class LQR_CBF_Planner:
     def finite_dLQR(self, A, B, Q, R):
         """
         Finite horizon discrete-time LQR
+        
+        FIX 1: Corrected to use P[i+1] for gain calculation (Principle of Optimality)
+        The optimal gain at time i should be derived from the future cost-to-go P[i+1],
+        not the current cost-to-go P[i].
         """
         N = int(self.MAX_TIME / self.DT)
         # Create a list of N + 1 elements
@@ -314,10 +340,11 @@ class LQR_CBF_Planner:
             # state cost matrix
             P[i-1] = Q + A.T @ P[i] @ A - (A.T @ P[i] @ B) @ np.linalg.pinv(
                 R + B.T @ P[i] @ B) @ (B.T @ P[i] @ A)   
-
+            # print("P[{}]:\n{}".format(i-1, P[i-1]))
         K = []
         for i in range(0, N, 1):
-            K.append(-np.linalg.inv(R + B.T @ P[i] @ B) @ B.T @ P[i] @ A)
+            # FIX 1: Use P[i+1] instead of P[i] for correct dynamic programming
+            K.append(-np.linalg.inv(R + B.T @ P[i+1] @ B) @ B.T @ P[i+1] @ A)
         
         return K
 
@@ -339,6 +366,10 @@ class LQR_CBF_Planner:
     def get_linear_model(self, x_bar, u_bar):
         """
         Computes the Discrete-time LTI approximated state space model x' = Ax + Bu + C
+        
+        FIX 2: Corrected Jacobian linearization for y-position w.r.t. theta
+        For unicycle model: dy/dt = v*sin(theta)
+        Partial derivative: ∂(dy/dt)/∂theta = v*cos(theta), not v*sin(theta)
         """
 
         x = x_bar[0]
@@ -350,7 +381,7 @@ class LQR_CBF_Planner:
 
         A = np.zeros((self.N, self.N))
         A[0, 2] = -v * np.sin(theta)
-        A[1, 2] = v * np.sin(theta)
+        A[1, 2] = v * np.cos(theta)  # FIX 2: Changed from v*sin(theta) to v*cos(theta)
         A_lin = np.eye(self.N) + self.DT * A
 
         B = np.zeros((self.N, self.M))
@@ -359,8 +390,9 @@ class LQR_CBF_Planner:
         B[2, 1] = 1
         B_lin = self.DT * B
 
+        # FIX 4: Changed third element from theta (state) to yaw (control input)
         f_xu = np.array(
-            [v * np.cos(theta), v * np.sin(theta), theta]
+            [v * np.cos(theta), v * np.sin(theta), yaw]
         ).reshape(self.N, 1)
         C_lin = self.DT * (
             f_xu - np.dot(A, x_bar.reshape(self.N, 1)) - np.dot(B, u_bar.reshape(self.M, 1))
@@ -379,10 +411,10 @@ if __name__ == '__main__':
     SHOW_ANIMATION = True
     SOLVE_QP = False
 
-    ntest = 20  # number of goal
+    ntest = 5  # number of goal
     area = 10.0  # sampling area
 
-    lqr_cbf_planner = LQR_CBF_Planner(visibility=True)
+    lqr_cbf_planner = LQR_CBF_Planner(visibility=False)
 
     # initialize a hash table for storing LQR gain
     # TODO: this should be modified to be optional 
@@ -427,4 +459,3 @@ if __name__ == '__main__':
             plt.show()
 
     print("end main")
-
